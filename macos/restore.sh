@@ -24,10 +24,21 @@ fi
 zstd -dc "$archive" | sudo tar -xf - -C /opt/homebrew
 
 export HOMEBREW_NO_AUTO_UPDATE=1
+formulae=()
 while IFS= read -r formula; do
   [[ -z $formula ]] && continue
-  brew list --versions "$formula" >/dev/null
-  brew link --overwrite --force "$formula" >/dev/null
+  formulae+=("$formula")
 done < "$formulae_manifest"
+
+if ((${#formulae[@]} == 0)); then
+  echo "Snapshot formula manifest is empty: $formulae_manifest" >&2
+  exit 1
+fi
+
+# Starting Homebrew once per formula dominates restore time for the full
+# dependency closure. Both commands accept multiple formula arguments, so
+# validate and link the whole snapshot with one Homebrew process each.
+brew list --versions "${formulae[@]}" >/dev/null
+brew link --overwrite --force "${formulae[@]}" >/dev/null
 
 echo "Restored VC3D macOS dependencies to /opt/homebrew"

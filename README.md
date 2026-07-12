@@ -126,9 +126,9 @@ steps:
 ```
 
 The restore helper adds the captured formula closure to Homebrew's standard
-Apple Silicon prefix, `/opt/homebrew`, and relinks it. It refuses to run on the
-wrong OS, architecture, or prefix. `HOMEBREW_NO_AUTO_UPDATE=1` should remain set
-in the build job.
+Apple Silicon prefix, `/opt/homebrew`, and relinks the entire closure in one
+Homebrew invocation. It refuses to run on the wrong OS, architecture, or
+prefix. `HOMEBREW_NO_AUTO_UPDATE=1` should remain set in the build job.
 
 ## Updating dependencies
 
