@@ -1,0 +1,37 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  manifests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate shell scripts
+        run: |
+          bash -n linux/install-deps.sh
+          bash -n windows/install-deps.sh
+          bash -n macos/install-deps.sh
+          bash -n macos/restore.sh
+      - name: Reject duplicate manifest entries
+        run: |
+          for manifest in windows/packages.txt macos/formulae.txt; do
+            duplicates=$(sed -e 's/[[:space:]]*#.*//' -e '/^[[:space:]]*$/d' "$manifest" | sort | uniq -d)
+            if [[ -n "$duplicates" ]]; then
+              echo "Duplicate entries in $manifest:"
+              echo "$duplicates"
+              exit 1
+            fi
+          done
+      - name: Validate Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: linux/Dockerfile
+          failure-threshold: error
+

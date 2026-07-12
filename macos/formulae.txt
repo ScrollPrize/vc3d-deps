@@ -1,0 +1,25 @@
+# Homebrew formulae for VC3D's macOS arm64 build and packaging jobs.
+llvm
+lld
+flang
+cmake
+ninja
+pkgconf
+qt
+ceres-solver
+eigen
+opencv
+cgal
+c-blosc
+boost
+libtiff
+curl
+nlohmann-json
+lapack
+openblas
+scotch
+hwloc
+gcc
+ccache
+zstd
+

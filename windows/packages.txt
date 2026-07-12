@@ -1,0 +1,24 @@
+# pacboy package targets for the UCRT64 environment.
+gcc:p
+cmake:p
+ninja:p
+ccache:p
+pkgconf:p
+qt6-base:p
+qt6-svg:p
+opencv:p
+ceres-solver:p
+cgal:p
+gmp:p
+mpfr:p
+boost:p
+eigen3:p
+nlohmann-json:p
+curl:p
+libtiff:p
+zlib:p
+zstd:p
+lz4:p
+blosc:p
+nsis:p
+

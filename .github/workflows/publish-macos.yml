@@ -1,0 +1,76 @@
+name: Publish macOS dependencies
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - macos/**
+      - .github/workflows/publish-macos.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: macos-15
+    timeout-minutes: 150
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require Apple Silicon runner
+        run: test "$(uname -m)" = arm64
+      - name: Install VC3D dependencies
+        run: macos/install-deps.sh
+      - name: Verify toolchain
+        run: |
+          /opt/homebrew/opt/llvm/bin/clang++ --version
+          /opt/homebrew/opt/flang/bin/flang --version
+          cmake --version
+          /opt/homebrew/opt/qt/bin/macdeployqt -h >/dev/null
+      - name: Create Homebrew snapshot
+        run: |
+          archive="$RUNNER_TEMP/vc3d-macos-15-arm64.tar.zst"
+          formulae="$RUNNER_TEMP/vc3d-macos-15-arm64-formulae.txt"
+          roots=()
+          while IFS= read -r formula; do
+            roots+=("$formula")
+          done < <(sed -e 's/[[:space:]]*#.*//' -e '/^[[:space:]]*$/d' macos/formulae.txt)
+          {
+            printf '%s\n' "${roots[@]}"
+            brew deps --installed --union --include-build --include-optional "${roots[@]}"
+          } | sort -u > "$formulae"
+          paths="$RUNNER_TEMP/vc3d-macos-15-arm64-paths.txt"
+          while IFS= read -r formula; do
+            cellar=$(brew --cellar "$formula")
+            printf './%s\n' "${cellar#/opt/homebrew/}"
+          done < "$formulae" > "$paths"
+          sudo tar \
+            -cf - \
+            -C /opt/homebrew \
+            -T "$paths" \
+            | zstd -T0 -10 -o "$archive"
+      - uses: oras-project/setup-oras@v1
+      - name: Publish snapshot to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | oras login ghcr.io -u '${{ github.actor }}' --password-stdin
+          repo="ghcr.io/scrollprize/vc3d-deps/macos"
+          cd "$RUNNER_TEMP"
+          artifact="vc3d-macos-15-arm64.tar.zst"
+          formulae="vc3d-macos-15-arm64-formulae.txt"
+          oras push "$repo:15-arm64" \
+            --artifact-type "application/vnd.vc3d.homebrew.snapshot.v1" \
+            "$artifact:application/vnd.vc3d.homebrew.layer.v1+tar+zstd" \
+            "$formulae:text/plain" \
+            --annotation "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --annotation "org.opencontainers.image.revision=${{ github.sha }}"
+          oras cp "$repo:15-arm64" "$repo:sha-${{ github.sha }}"

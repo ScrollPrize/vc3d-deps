@@ -1,0 +1,44 @@
+name: Publish Linux dependencies
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - linux/**
+      - .github/workflows/publish-linux.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: linux
+          file: linux/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/scrollprize/vc3d-deps/linux:ubuntu-26.04
+            ghcr.io/scrollprize/vc3d-deps/linux:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=vc3d-linux-ubuntu-26.04
+          cache-to: type=gha,mode=max,scope=vc3d-linux-ubuntu-26.04

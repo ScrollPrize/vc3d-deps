@@ -1,0 +1,70 @@
+name: Publish Windows dependencies
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - windows/**
+      - .github/workflows/publish-windows.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: windows-2025
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: UCRT64
+          update: true
+      - name: Install VC3D dependencies
+        shell: msys2 {0}
+        run: windows/install-deps.sh
+      - name: Verify toolchain
+        shell: msys2 {0}
+        run: |
+          cmake --version
+          ninja --version
+          g++ --version
+          makensis -VERSION
+      - name: Create UCRT64 snapshot
+        shell: pwsh
+        env:
+          MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'vc3d-windows-ucrt64.7z'
+          Push-Location $env:MSYS2_LOCATION
+          & "$env:ProgramFiles\7-Zip\7z.exe" a -t7z -mx=5 -mmt=on $archive '.\*'
+          if ($LASTEXITCODE -ne 0) { throw "7-Zip failed with exit $LASTEXITCODE" }
+          Pop-Location
+      - uses: oras-project/setup-oras@v1
+      - name: Publish snapshot to GHCR
+        shell: pwsh
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $env:GHCR_TOKEN | oras login ghcr.io -u '${{ github.actor }}' --password-stdin
+          Push-Location $env:RUNNER_TEMP
+          $artifact = 'vc3d-windows-ucrt64.7z'
+          $repo = 'ghcr.io/scrollprize/vc3d-deps/windows'
+          $args = @(
+            'push', "${repo}:ucrt64", "$artifact`:application/vnd.7zip",
+            '--artifact-type', 'application/vnd.vc3d.msys2.snapshot.v1',
+            '--annotation', 'org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}',
+            '--annotation', 'org.opencontainers.image.revision=${{ github.sha }}'
+          )
+          & oras @args
+          if ($LASTEXITCODE -ne 0) { throw "ORAS push failed with exit $LASTEXITCODE" }
+          & oras cp "${repo}:ucrt64" "${repo}:sha-${{ github.sha }}"
+          if ($LASTEXITCODE -ne 0) { throw "ORAS tag copy failed with exit $LASTEXITCODE" }
+          Pop-Location
