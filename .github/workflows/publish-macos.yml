@@ -34,7 +34,8 @@ jobs:
           /opt/homebrew/opt/llvm/bin/clang++ --version
           /opt/homebrew/opt/flang/bin/flang --version
           cmake --version
-          /opt/homebrew/opt/qt/bin/macdeployqt -h >/dev/null
+          /opt/homebrew/opt/qt/bin/qtpaths --qt-version
+          test -x /opt/homebrew/opt/qt/bin/macdeployqt
       - name: Create Homebrew snapshot
         run: |
           archive="$RUNNER_TEMP/vc3d-macos-15-arm64.tar.zst"
